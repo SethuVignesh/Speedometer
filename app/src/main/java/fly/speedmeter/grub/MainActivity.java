@@ -1,6 +1,9 @@
 package fly.speedmeter.grub;
 
+import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.location.GpsSatellite;
@@ -8,10 +11,11 @@ import android.location.GpsStatus;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.media.MediaPlayer;
+import android.os.Bundle;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBarActivity;
-import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
 import android.text.SpannableString;
 import android.text.style.RelativeSizeSpan;
@@ -21,7 +25,6 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Chronometer;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.gc.materialdesign.views.ProgressBarCircularIndeterminate;
 import com.gc.materialdesign.widgets.Dialog;
@@ -33,7 +36,7 @@ import java.util.Locale;
 
 public class MainActivity extends ActionBarActivity implements LocationListener, GpsStatus.Listener {
 
-    private SharedPreferences  sharedPreferences;
+    private SharedPreferences sharedPreferences;
     private LocationManager mLocationManager;
     private static Data data;
 
@@ -52,6 +55,8 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
     private Data.onGpsServiceUpdate onGpsServiceUpdate;
 
     private boolean firstfix;
+    private boolean targetReached;
+    MediaPlayer mPlayer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,9 +81,18 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
             public void update() {
                 maxSpeed.setText(data.getMaxSpeed());
                 distance.setText(data.getDistance());
-                if (sharedPreferences.getBoolean("auto_average", false)){
+                double targetDistance = Double.parseDouble(sharedPreferences.getString("goal_distance", "10").trim());
+                if (data.getDistanceInteger() > targetDistance) {
+                    if (targetReached == false) {
+                        targetReached = true;
+                        mPlayer = MediaPlayer.create(MainActivity.this, R.raw.complete);
+                        mPlayer.start();
+                        showAlertDialog("Wow!", "Maams kalakitteenga ponga "+targetDistance +" km ootiyaachu", MainActivity.this);
+                    }
+                }
+                if (sharedPreferences.getBoolean("auto_average", false)) {
                     averageSpeed.setText(data.getAverageSpeedMotion());
-                }else{
+                } else {
                     averageSpeed.setText(data.getAverageSpeed());
                 }
             }
@@ -99,31 +113,32 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
         time.setText("00:00:00");
         time.setOnChronometerTickListener(new Chronometer.OnChronometerTickListener() {
             boolean isPair = true;
+
             @Override
             public void onChronometerTick(Chronometer chrono) {
                 long time;
-                if(data.isRunning()){
-                    time= SystemClock.elapsedRealtime() - chrono.getBase();
+                if (data.isRunning()) {
+                    time = SystemClock.elapsedRealtime() - chrono.getBase();
                     data.setTime(time);
-                }else{
+                } else {
                     time = data.getTime();
                 }
 
-                int h   = (int)(time /3600000);
-                int m = (int)(time  - h*3600000)/60000;
-                int s= (int)(time  - h*3600000 - m*60000)/1000 ;
-                String hh = h < 10 ? "0"+h: h+"";
-                String mm = m < 10 ? "0"+m: m+"";
-                String ss = s < 10 ? "0"+s: s+"";
-                chrono.setText(hh+":"+mm+":"+ss);
+                int h = (int) (time / 3600000);
+                int m = (int) (time - h * 3600000) / 60000;
+                int s = (int) (time - h * 3600000 - m * 60000) / 1000;
+                String hh = h < 10 ? "0" + h : h + "";
+                String mm = m < 10 ? "0" + m : m + "";
+                String ss = s < 10 ? "0" + s : s + "";
+                chrono.setText(hh + ":" + mm + ":" + ss);
 
-                if (data.isRunning()){
-                    chrono.setText(hh+":"+mm+":"+ss);
+                if (data.isRunning()) {
+                    chrono.setText(hh + ":" + mm + ":" + ss);
                 } else {
                     if (isPair) {
                         isPair = false;
-                        chrono.setText(hh+":"+mm+":"+ss);
-                    }else{
+                        chrono.setText(hh + ":" + mm + ":" + ss);
+                    } else {
                         isPair = true;
                         chrono.setText("");
                     }
@@ -133,7 +148,7 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
         });
     }
 
-    public void onFabClick(View v){
+    public void onFabClick(View v) {
         if (!data.isRunning()) {
             fab.setImageDrawable(getResources().getDrawable(R.drawable.ic_action_pause));
             data.setRunning(true);
@@ -142,16 +157,18 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
             data.setFirstTime(true);
             startService(new Intent(getBaseContext(), GpsServices.class));
             refresh.setVisibility(View.INVISIBLE);
-        }else{
+        } else {
             fab.setImageDrawable(getResources().getDrawable(R.drawable.ic_action_play));
             data.setRunning(false);
             status.setText("");
             stopService(new Intent(getBaseContext(), GpsServices.class));
             refresh.setVisibility(View.VISIBLE);
+//            targetReached=false;
         }
     }
 
-    public void onRefreshClick(View v){
+    public void onRefreshClick(View v) {
+        targetReached=false;
         resetData();
         stopService(new Intent(getBaseContext(), GpsServices.class));
     }
@@ -160,14 +177,14 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
     protected void onResume() {
         super.onResume();
         firstfix = true;
-        if (!data.isRunning()){
+        if (!data.isRunning()) {
             Gson gson = new Gson();
             String json = sharedPreferences.getString("data", "");
             data = gson.fromJson(json, Data.class);
         }
-        if (data == null){
+        if (data == null) {
             data = new Data(onGpsServiceUpdate);
-        }else{
+        } else {
             data.setOnGpsServiceUpdate(onGpsServiceUpdate);
         }
 
@@ -197,7 +214,7 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
     }
 
     @Override
-    public void onDestroy(){
+    public void onDestroy() {
         super.onDestroy();
         stopService(new Intent(getBaseContext(), GpsServices.class));
     }
@@ -231,10 +248,10 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
     public void onLocationChanged(Location location) {
         if (location.hasAccuracy()) {
             SpannableString s = new SpannableString(String.format("%.0f", location.getAccuracy()) + "m");
-            s.setSpan(new RelativeSizeSpan(0.75f), s.length()-1, s.length(), 0);
+            s.setSpan(new RelativeSizeSpan(0.75f), s.length() - 1, s.length(), 0);
             accuracy.setText(s);
 
-            if (firstfix){
+            if (firstfix) {
                 status.setText("");
                 fab.setVisibility(View.VISIBLE);
                 if (!data.isRunning() && !maxSpeed.getText().equals("")) {
@@ -242,7 +259,7 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
                 }
                 firstfix = false;
             }
-        }else{
+        } else {
             firstfix = true;
         }
 
@@ -254,13 +271,13 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
                 speed = String.format(Locale.ENGLISH, "%.0f", location.getSpeed() * 3.6 * 0.62137119) + "mi/h";
             }
             SpannableString s = new SpannableString(speed);
-            s.setSpan(new RelativeSizeSpan(0.25f), s.length()-4, s.length(), 0);
+            s.setSpan(new RelativeSizeSpan(0.25f), s.length() - 4, s.length(), 0);
             currentSpeed.setText(s);
         }
 
     }
 
-    public void onGpsStatusChanged (int event) {
+    public void onGpsStatusChanged(int event) {
         switch (event) {
             case GpsStatus.GPS_EVENT_SATELLITE_STATUS:
                 GpsStatus gpsStatus = mLocationManager.getGpsStatus(null);
@@ -297,7 +314,7 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
         }
     }
 
-    public void showGpsDisabledDialog(){
+    public void showGpsDisabledDialog() {
         Dialog dialog = new Dialog(this, getResources().getString(R.string.gps_disabled), getResources().getString(R.string.please_enable_gps));
 
         dialog.setOnAcceptButtonClickListener(new View.OnClickListener() {
@@ -309,7 +326,7 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
         dialog.show();
     }
 
-    public void resetData(){
+    public void resetData() {
         fab.setImageDrawable(getResources().getDrawable(R.drawable.ic_action_play));
         refresh.setVisibility(View.INVISIBLE);
         time.stop();
@@ -324,7 +341,7 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
         return data;
     }
 
-    public void onBackPressed(){
+    public void onBackPressed() {
         Intent a = new Intent(Intent.ACTION_MAIN);
         a.addCategory(Intent.CATEGORY_HOME);
         a.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -332,11 +349,45 @@ public class MainActivity extends ActionBarActivity implements LocationListener,
     }
 
     @Override
-    public void onStatusChanged(String s, int i, Bundle bundle) {}
+    public void onStatusChanged(String s, int i, Bundle bundle) {
+    }
 
     @Override
-    public void onProviderEnabled(String s) {}
+    public void onProviderEnabled(String s) {
+    }
 
     @Override
-    public void onProviderDisabled(String s) {}
+    public void onProviderDisabled(String s) {
+    }
+
+    AlertDialog adb;
+
+    public void showAlertDialog(final String title, final String message, final Activity activity) {
+        activity.runOnUiThread(new Runnable() {
+            public void run() {
+
+                try {
+                    if (adb != null && adb.isShowing()) {
+                        adb.cancel();
+                    }
+                    adb = new AlertDialog.Builder(activity).setTitle(title).setMessage(message)
+                            .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int which) {
+                                    if (mPlayer != null && mPlayer.isPlaying()) {
+                                        mPlayer.stop();
+                                    }
+                                    dialog.dismiss();
+
+                                }
+                            })
+                            .show();
+                    adb.setCancelable(false);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+            }
+        });
+    }
+
 }

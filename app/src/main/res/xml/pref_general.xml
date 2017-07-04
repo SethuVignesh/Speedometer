@@ -14,6 +14,14 @@
         android:title="@string/pref_miles_per_hour"
         android:summary="@string/pref_miles_per_hour_summary"
     />
+        <EditTextPreference
+        android:key="goal_distance"
+        android:title="Target distance"
+        android:summary="Define your target distance"
+        android:dialogTitle="Target"
+        android:dialogMessage="Enter target distance in Km"
+        android:defaultValue="10" />
+
 
     </PreferenceCategory>
 

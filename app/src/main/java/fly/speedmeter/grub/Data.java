@@ -63,6 +63,9 @@ public class Data {
         }
         return s;
     }
+    public double getDistanceInteger(){
+        return distanceKm;
+    }
 
     public SpannableString getMaxSpeed() {
         SpannableString s = new SpannableString(String.format("%.0f", maxSpeed) + "km/h");
